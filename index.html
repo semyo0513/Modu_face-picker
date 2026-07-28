@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>오늘의 발표자 · AI 얼굴 인식 추첨기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- 조리개 셔터 인트로 오버레이 -->
+  <div id="shutter" class="shutter" aria-hidden="true">
+    <div class="blade b1"></div>
+    <div class="blade b2"></div>
+    <div class="blade b3"></div>
+    <div class="blade b4"></div>
+    <div class="blade b5"></div>
+    <div class="blade b6"></div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-eyebrow">창순기획</span>
+      <h1 class="brand-title">오늘의 발표자</h1>
+    </div>
+
+    <nav class="mode-switch" role="tablist" aria-label="추첨 모드 선택">
+      <button id="modeCameraBtn" class="mode-btn is-active" role="tab" aria-selected="true">AI 얼굴 인식 모드</button>
+      <button id="modeManualBtn" class="mode-btn" role="tab" aria-selected="false">번호 추첨 모드</button>
+    </nav>
+
+    <button id="fullscreenBtn" class="icon-btn" title="전체 화면">⛶ 전체화면</button>
+  </header>
+
+  <main class="stage">
+
+    <!-- ===================== 카메라(얼굴 인식) 모드 ===================== -->
+    <section id="cameraMode" class="mode-panel is-active">
+
+      <div class="viewport">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+
+        <div id="cameraStatus" class="camera-status">
+          <span class="dot"></span>
+          <span id="cameraStatusText">카메라를 준비하는 중…</span>
+        </div>
+
+        <div id="faceCounter" class="face-counter">
+          <span class="face-counter-num" id="faceCountNum">0</span>
+          <span class="face-counter-label">명 인식됨</span>
+        </div>
+
+        <div id="resultPanel" class="result-panel" hidden>
+          <p class="result-eyebrow">오늘의 발표자</p>
+          <div id="resultList" class="result-list"></div>
+        </div>
+      </div>
+
+      <aside class="control-panel">
+
+        <div class="field">
+          <label for="deviceSelect">카메라 선택</label>
+          <select id="deviceSelect"></select>
+        </div>
+
+        <div class="field">
+          <label for="resolutionSelect">해상도 모드 (교실 크기·거리에 맞게 선택)</label>
+          <select id="resolutionSelect">
+            <option value="close">근거리 · 720p (소규모 교실, 성능 우선)</option>
+            <option value="standard" selected>표준 · 1080p (일반 교실 30명 내외)</option>
+            <option value="far">원거리 고화질 · 1440p (넓은 교실, 뒷자리까지)</option>
+            <option value="max">최대 화질 · 4K (초광각 카메라 전용, 고사양 필요)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="pickCount">몇 명을 뽑을까요?</label>
+          <div class="stepper">
+            <button id="countMinus" class="stepper-btn" aria-label="인원 줄이기">−</button>
+            <input id="pickCount" type="number" min="1" value="1" inputmode="numeric" />
+            <button id="countPlus" class="stepper-btn" aria-label="인원 늘리기">+</button>
+          </div>
+        </div>
+
+        <button id="drawBtn" class="draw-btn" disabled>추첨 시작</button>
+        <button id="resetBtn" class="reset-btn" hidden>다시 인식하기</button>
+
+        <details class="tips">
+          <summary>인식이 잘 안 될 때</summary>
+          <ul>
+            <li>전자칠판 내장 카메라보다 <strong>외장 웹캠(1080p 이상)</strong>을 교실 뒤쪽까지 보이게 설치하면 인식률이 올라갑니다.</li>
+            <li>먼 자리 학생은 얼굴이 작게 잡혀 인식이 늦을 수 있어요. 잠시 기다리거나 카메라를 앞쪽으로 당겨보세요.</li>
+            <li>역광(창문을 등지고 촬영)은 피해주세요.</li>
+            <li>인식이 계속 어렵다면 <strong>번호 추첨 모드</strong>로 전환해 출석 번호로 뽑을 수 있습니다.</li>
+          </ul>
+        </details>
+
+      </aside>
+    </section>
+
+    <!-- ===================== 번호 추첨 모드 ===================== -->
+    <section id="manualMode" class="mode-panel">
+
+      <div class="viewport manual-viewport">
+        <div id="manualGrid" class="manual-grid"></div>
+
+        <div id="manualResultPanel" class="result-panel" hidden>
+          <p class="result-eyebrow">오늘의 발표자</p>
+          <div id="manualResultList" class="result-list"></div>
+        </div>
+      </div>
+
+      <aside class="control-panel">
+        <div class="field">
+          <label for="totalCount">전체 학생 수 (출석번호 1~N)</label>
+          <input id="totalCount" type="number" min="1" value="30" inputmode="numeric" />
+        </div>
+
+        <div class="field">
+          <label for="pickCountManual">몇 명을 뽑을까요?</label>
+          <div class="stepper">
+            <button id="countMinusM" class="stepper-btn" aria-label="인원 줄이기">−</button>
+            <input id="pickCountManual" type="number" min="1" value="1" inputmode="numeric" />
+            <button id="countPlusM" class="stepper-btn" aria-label="인원 늘리기">+</button>
+          </div>
+        </div>
+
+        <button id="drawBtnManual" class="draw-btn">추첨 시작</button>
+        <button id="resetBtnManual" class="reset-btn" hidden>다시 뽑기</button>
+      </aside>
+    </section>
+
+  </main>
+
+  <canvas id="confetti" class="confetti-canvas" aria-hidden="true"></canvas>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

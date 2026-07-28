@@ -1,0 +1,353 @@
+/* ============================================================
+   토큰
+   색상: bg #0B0E14 / panel #12161F / ink #F1EFE7
+         cyan(스캔) #4FD1C5 / gold(선택) #F5B942 / rose(경고) #E1523D
+   타이포: 디스플레이 'Black Han Sans' / 본문 'Noto Sans KR' / 숫자 'JetBrains Mono'
+   ============================================================ */
+:root{
+  --bg:#0B0E14;
+  --panel:#12161F;
+  --panel-2:#171C27;
+  --line:#262C3A;
+  --ink:#F1EFE7;
+  --ink-dim:#9BA3B4;
+  --cyan:#4FD1C5;
+  --gold:#F5B942;
+  --rose:#E1523D;
+  --radius:18px;
+}
+
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Noto Sans KR', system-ui, sans-serif;
+  overflow-x:hidden;
+}
+button, input, select{ font-family:inherit; }
+
+/* ---------- 상단바 ---------- */
+.topbar{
+  display:flex;
+  align-items:center;
+  gap:24px;
+  padding:14px 24px;
+  border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg, var(--panel), var(--bg));
+}
+.brand{ display:flex; flex-direction:column; gap:2px; }
+.brand-eyebrow{
+  font-family:'JetBrains Mono', monospace;
+  font-size:11px;
+  letter-spacing:.14em;
+  color:var(--gold);
+  text-transform:uppercase;
+}
+.brand-title{
+  font-family:'Black Han Sans', sans-serif;
+  font-size:26px;
+  margin:0;
+  letter-spacing:.02em;
+}
+.mode-switch{ margin-left:auto; display:flex; gap:8px; }
+.mode-btn{
+  background:transparent;
+  border:1px solid var(--line);
+  color:var(--ink-dim);
+  padding:10px 16px;
+  border-radius:999px;
+  font-weight:700;
+  font-size:13px;
+  cursor:pointer;
+  transition:all .2s ease;
+}
+.mode-btn.is-active{
+  color:var(--bg);
+  background:var(--cyan);
+  border-color:var(--cyan);
+}
+.icon-btn{
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  color:var(--ink);
+  padding:10px 14px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:600;
+  font-size:13px;
+}
+.icon-btn:hover{ border-color:var(--cyan); }
+
+/* ---------- 무대 레이아웃 ---------- */
+.stage{ padding:24px; }
+.mode-panel{ display:none; }
+.mode-panel.is-active{
+  display:grid;
+  grid-template-columns:1fr 320px;
+  gap:20px;
+  align-items:start;
+}
+@media (max-width: 900px){
+  .mode-panel.is-active{ grid-template-columns:1fr; }
+}
+
+.viewport{
+  position:relative;
+  width:100%;
+  aspect-ratio:16/9;
+  background:#000;
+  border-radius:var(--radius);
+  overflow:hidden;
+  border:1px solid var(--line);
+  box-shadow:0 20px 60px rgba(0,0,0,.45);
+}
+#video{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover;
+  transform:scaleX(-1); /* 셀피 미러링 */
+}
+#overlay{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  transform:scaleX(-1);
+}
+
+.camera-status{
+  position:absolute; top:16px; left:16px;
+  display:flex; align-items:center; gap:8px;
+  background:rgba(11,14,20,.72);
+  backdrop-filter:blur(6px);
+  padding:8px 14px;
+  border-radius:999px;
+  font-size:13px;
+  border:1px solid var(--line);
+}
+.camera-status .dot{
+  width:8px; height:8px; border-radius:50%;
+  background:var(--rose);
+  box-shadow:0 0 8px var(--rose);
+}
+.camera-status.is-ready .dot{ background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+
+.face-counter{
+  position:absolute; top:16px; right:16px;
+  display:flex; align-items:baseline; gap:6px;
+  background:rgba(11,14,20,.72);
+  backdrop-filter:blur(6px);
+  padding:8px 16px;
+  border-radius:999px;
+  border:1px solid var(--line);
+}
+.face-counter-num{
+  font-family:'JetBrains Mono', monospace;
+  font-weight:700;
+  font-size:20px;
+  color:var(--gold);
+  font-variant-numeric:tabular-nums;
+}
+.face-counter-label{ font-size:12px; color:var(--ink-dim); }
+
+/* ---------- 결과 패널 ---------- */
+.result-panel{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:18px;
+  background:rgba(6,8,12,.72);
+  backdrop-filter:blur(4px);
+}
+.result-eyebrow{
+  font-family:'JetBrains Mono', monospace;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--gold);
+  font-size:13px;
+  margin:0;
+}
+.result-list{
+  display:flex; flex-wrap:wrap;
+  gap:14px;
+  justify-content:center;
+  max-width:80%;
+}
+.result-chip{
+  font-family:'Black Han Sans', sans-serif;
+  font-size:clamp(22px, 3.4vw, 44px);
+  color:var(--bg);
+  background:var(--gold);
+  padding:10px 26px;
+  border-radius:14px;
+  box-shadow:0 0 32px rgba(245,185,66,.55);
+  animation:pop .4s cubic-bezier(.2,1.4,.4,1) backwards;
+}
+@keyframes pop{
+  0%{ transform:scale(.4) rotate(-6deg); opacity:0; }
+  100%{ transform:scale(1) rotate(0); opacity:1; }
+}
+
+/* ---------- 컨트롤 패널 ---------- */
+.control-panel{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:20px;
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
+.field{ display:flex; flex-direction:column; gap:8px; }
+.field label{ font-size:13px; color:var(--ink-dim); font-weight:500; }
+.field select, .field input[type="number"]{
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  color:var(--ink);
+  padding:10px 12px;
+  border-radius:10px;
+  font-size:15px;
+}
+.stepper{ display:flex; align-items:center; gap:8px; }
+.stepper input{
+  flex:1;
+  text-align:center;
+  font-family:'JetBrains Mono', monospace;
+  font-weight:700;
+  font-size:20px;
+}
+.stepper-btn{
+  width:40px; height:40px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:var(--panel-2);
+  color:var(--ink);
+  font-size:18px;
+  cursor:pointer;
+}
+.stepper-btn:active{ background:var(--cyan); color:var(--bg); }
+
+.draw-btn{
+  margin-top:4px;
+  padding:16px;
+  border:none;
+  border-radius:14px;
+  background:var(--gold);
+  color:var(--bg);
+  font-weight:900;
+  font-size:17px;
+  cursor:pointer;
+  transition:transform .15s ease, box-shadow .15s ease;
+  box-shadow:0 10px 24px rgba(245,185,66,.25);
+}
+.draw-btn:disabled{
+  background:var(--panel-2);
+  color:var(--ink-dim);
+  box-shadow:none;
+  cursor:not-allowed;
+}
+.draw-btn:not(:disabled):hover{ transform:translateY(-2px); }
+.draw-btn.is-drawing{ background:var(--cyan); }
+
+.reset-btn{
+  padding:14px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:transparent;
+  color:var(--ink);
+  font-weight:700;
+  cursor:pointer;
+}
+.reset-btn:hover{ border-color:var(--rose); color:var(--rose); }
+
+.tips{
+  margin-top:auto;
+  font-size:13px;
+  color:var(--ink-dim);
+  border-top:1px solid var(--line);
+  padding-top:14px;
+}
+.tips summary{ cursor:pointer; color:var(--ink); font-weight:600; }
+.tips ul{ margin:10px 0 0; padding-left:18px; line-height:1.6; }
+
+/* ---------- 번호 추첨 모드 ---------- */
+.manual-viewport{
+  aspect-ratio:auto;
+  min-height:480px;
+  background:var(--panel);
+  padding:24px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.manual-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(64px, 1fr));
+  gap:10px;
+  width:100%;
+}
+.manual-num{
+  aspect-ratio:1;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--panel-2);
+  border:1px solid var(--line);
+  border-radius:10px;
+  font-family:'JetBrains Mono', monospace;
+  font-weight:700;
+  font-size:18px;
+  color:var(--ink-dim);
+  transition:all .15s ease;
+}
+.manual-num.is-scanning{ border-color:var(--cyan); color:var(--cyan); }
+.manual-num.is-winner{
+  background:var(--gold);
+  border-color:var(--gold);
+  color:var(--bg);
+  box-shadow:0 0 20px rgba(245,185,66,.6);
+  transform:scale(1.08);
+}
+
+/* ---------- 조리개(카메라 셔터) 인트로 ---------- */
+.shutter{
+  position:fixed; inset:0;
+  z-index:999;
+  pointer-events:none;
+}
+.shutter .blade{
+  position:absolute;
+  top:50%; left:50%;
+  width:150vmax; height:150vmax;
+  background:var(--bg);
+  transform-origin:0% 0%;
+  clip-path:polygon(0 0, 17% 0, 0 17%);
+}
+.b1{ transform:translate(-50%,-50%) rotate(0deg); }
+.b2{ transform:translate(-50%,-50%) rotate(60deg); }
+.b3{ transform:translate(-50%,-50%) rotate(120deg); }
+.b4{ transform:translate(-50%,-50%) rotate(180deg); }
+.b5{ transform:translate(-50%,-50%) rotate(240deg); }
+.b6{ transform:translate(-50%,-50%) rotate(300deg); }
+.shutter.is-open .blade{
+  clip-path:polygon(0 0, 0 0, 0 0);
+  transition:clip-path .7s cubic-bezier(.6,0,.2,1);
+}
+.shutter.is-hidden{ display:none; }
+
+/* ---------- 컨페티 캔버스 ---------- */
+.confetti-canvas{
+  position:fixed; inset:0;
+  width:100vw; height:100vh;
+  pointer-events:none;
+  z-index:998;
+}
+
+/* ---------- 접근성: 모션 최소화 ---------- */
+@media (prefers-reduced-motion: reduce){
+  .shutter.is-open .blade{ transition:none; }
+  .result-chip{ animation:none; }
+}
+
+:focus-visible{
+  outline:3px solid var(--cyan);
+  outline-offset:2px;
+}
