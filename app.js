@@ -42,6 +42,7 @@ const state = {
   tracks: [], // [{id, box:{x,y,w,h}, misses}]
   nextTrackId: 1,
   isDrawing: false, // 추첨 애니메이션 진행 중 여부
+  coverMap: null, // object-fit:cover로 잘리는 실제 화면 표시 영역 (원본 영상 픽셀 기준)
 };
 
 /* ----------------------------------------------------------
@@ -203,12 +204,42 @@ function setCameraStatus(ready, text) {
 }
 
 function resizeOverlay() {
-  overlay.width = video.videoWidth || video.clientWidth;
-  overlay.height = video.videoHeight || video.clientHeight;
-  confettiCanvas.width = window.innerWidth;
-  confettiCanvas.height = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+
+  // 오버레이 캔버스: 화면에 표시되는 CSS 크기 × 디바이스 픽셀비로 내부 해상도를 맞춰
+  // 고해상도(레티나 등) 화면에서도 박스 선이 흐려지지 않게 합니다.
+  const cssW = video.clientWidth || overlay.clientWidth;
+  const cssH = video.clientHeight || overlay.clientHeight;
+  overlay.width = Math.round(cssW * dpr);
+  overlay.height = Math.round(cssH * dpr);
+  overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // 컨페티 캔버스도 동일하게 HiDPI 대응
+  confettiCanvas.width = Math.round(window.innerWidth * dpr);
+  confettiCanvas.height = Math.round(window.innerHeight * dpr);
+  confettiCanvas.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // video는 object-fit:cover로 표시되므로, 실제 화면에 "보이는" 영상 영역만
+  // 원본 픽셀 좌표계에서 계산해 둡니다. 이 영역 기준으로 얼굴 좌표를 매핑해야
+  // 좌우 화면 비율이 다른 카메라에서도 박스가 얼굴 위치와 어긋나지 않습니다.
+  if (video.videoWidth && video.videoHeight && cssW && cssH) {
+    const videoAR = video.videoWidth / video.videoHeight;
+    const boxAR = cssW / cssH;
+    if (videoAR > boxAR) {
+      const srcH = video.videoHeight;
+      const srcW = srcH * boxAR;
+      state.coverMap = { srcX: (video.videoWidth - srcW) / 2, srcY: 0, srcW, srcH };
+    } else {
+      const srcW = video.videoWidth;
+      const srcH = srcW / boxAR;
+      state.coverMap = { srcX: 0, srcY: (video.videoHeight - srcH) / 2, srcW, srcH };
+    }
+  }
 }
 window.addEventListener("resize", resizeOverlay);
+// 카메라/해상도 전환 시 영상의 실제 프레임 크기가 확정되는 시점에도 다시 계산합니다.
+video.addEventListener("loadedmetadata", resizeOverlay);
+video.addEventListener("resize", resizeOverlay);
 
 /* ----------------------------------------------------------
    7. MediaPipe FaceDetector 초기화
@@ -270,14 +301,20 @@ function detectionLoop() {
   requestAnimationFrame(detectionLoop);
 }
 
-// 정규화 좌표(0~1)로 변환한 얼굴 박스
+// 정규화 좌표(0~1)로 변환한 얼굴 박스. object-fit:cover로 잘린 화면 표시 영역(coverMap) 기준으로 계산합니다.
 function toNormalizedBox(detection) {
   const bb = detection.boundingBox;
+  const map = state.coverMap || {
+    srcX: 0,
+    srcY: 0,
+    srcW: video.videoWidth,
+    srcH: video.videoHeight,
+  };
   return {
-    x: bb.originX / video.videoWidth,
-    y: bb.originY / video.videoHeight,
-    w: bb.width / video.videoWidth,
-    h: bb.height / video.videoHeight,
+    x: (bb.originX - map.srcX) / map.srcW,
+    y: (bb.originY - map.srcY) / map.srcH,
+    w: bb.width / map.srcW,
+    h: bb.height / map.srcH,
   };
 }
 
@@ -329,23 +366,28 @@ function updateTracks(detections) {
 /* ----------------------------------------------------------
    10. 뷰파인더 스타일 박스 그리기 (카메라 AF 브래킷 모티프)
    ---------------------------------------------------------- */
-function drawViewfinderBoxes(tracks, highlightIds = null, winnerIds = null) {
-  overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+function drawViewfinderBoxes(tracks, { activeId = null, activeColor = "#F5B942", lockedIds = null } = {}) {
+  const cssW = overlay.clientWidth;
+  const cssH = overlay.clientHeight;
+  overlayCtx.clearRect(0, 0, cssW, cssH);
 
   tracks.forEach((track) => {
-    const x = track.box.x * overlay.width;
-    const y = track.box.y * overlay.height;
-    const w = track.box.w * overlay.width;
-    const h = track.box.h * overlay.height;
+    const x = track.box.x * cssW;
+    const y = track.box.y * cssH;
+    const w = track.box.w * cssW;
+    const h = track.box.h * cssH;
 
     let color = "#4FD1C5"; // 기본: cyan
     let lineWidth = 2;
-    if (winnerIds?.has(track.id)) {
+
+    if (lockedIds?.has(track.id)) {
+      // 이미 확정된 당첨자: 굵은 금색으로 고정
       color = "#F5B942";
       lineWidth = 4;
-    } else if (highlightIds?.has(track.id)) {
-      color = "#F5B942";
-      lineWidth = 3;
+    } else if (track.id === activeId) {
+      // 룰렛이 현재 지나가고 있는 얼굴: 프레임마다 색이 바뀌며 반짝임
+      color = activeColor;
+      lineWidth = 5;
     }
 
     drawCornerBrackets(overlayCtx, x, y, w, h, color, lineWidth);
@@ -396,6 +438,38 @@ function stepInput(input, delta) {
   input.dispatchEvent(new Event("input"));
 }
 
+// ---- 룰렛 연출 공통 로직 -------------------------------------------------
+// 고정된 지연시간 시퀀스: 처음엔 빠르게 지나가다 점점 느려지며(감속) 마지막에 목표 지점에 정확히 멈춥니다.
+// 후보 수(n)와 무관하게 항상 같은 리듬으로 동작하도록 값을 고정해 두었습니다.
+const SPIN_DELAYS = [70, 70, 80, 90, 100, 115, 135, 160, 190, 225, 265, 310, 360, 420];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// targetIndex에서 역산해, 원형으로 여러 바퀴를 돌다가 마지막 스텝에 정확히 target에서
+// 멈추는 인덱스 시퀀스를 만듭니다.
+function buildSpinSteps(n, targetIndex) {
+  const steps = SPIN_DELAYS.length;
+  const indices = [];
+  for (let k = 0; k < steps; k++) {
+    const stepsFromEnd = steps - 1 - k;
+    const idx = ((targetIndex - stepsFromEnd) % n + n) % n;
+    indices.push(idx);
+  }
+  return indices;
+}
+
+// pool(길이 n) 안에서 targetIndex 하나를 향해 룰렛처럼 감속하며 도는 애니메이션.
+// onStep(idx, stepNumber) 콜백으로 매 스텝마다 강조할 위치를 알려줍니다.
+async function runSpin(n, targetIndex, onStep) {
+  const indices = buildSpinSteps(n, targetIndex);
+  for (let k = 0; k < indices.length; k++) {
+    onStep(indices[k], k);
+    await sleep(SPIN_DELAYS[k]);
+  }
+}
+
 /* ----------------------------------------------------------
    12. 카메라 모드 추첨 시퀀스
    ---------------------------------------------------------- */
@@ -404,7 +478,8 @@ resetBtn.addEventListener("click", resetCameraMode);
 
 async function runCameraDraw() {
   const pickCount = Number(pickCountInput.value);
-  const candidates = [...state.tracks]; // 추첨 시작 시점의 얼굴 목록으로 고정
+  // 화면상 왼쪽에서 오른쪽으로 자연스럽게 훑는 느낌을 주기 위해 x좌표 순으로 정렬
+  const candidates = [...state.tracks].sort((a, b) => a.box.x - b.box.x);
   if (candidates.length < 1 || pickCount > candidates.length) return;
 
   state.isDrawing = true;
@@ -412,11 +487,21 @@ async function runCameraDraw() {
   drawBtn.classList.add("is-drawing");
   drawBtn.textContent = "추첨 중…";
 
-  await scanningAnimation(candidates, 2200);
-
+  // 뽑힐 순서를 미리 정해 두고(공정한 비복원추출), 라운드마다 룰렛이 그 자리에서 멈추도록 연출합니다.
   const winners = pickRandomUnique(candidates, pickCount);
-  const winnerIds = new Set(winners.map((w) => w.id));
-  drawViewfinderBoxes(candidates, null, winnerIds);
+  const lockedIds = new Set();
+  let pool = [...candidates];
+
+  for (const winner of winners) {
+    const targetIndex = pool.findIndex((c) => c.id === winner.id);
+    await runSpin(pool.length, targetIndex, (idx, step) => {
+      const flashColor = step % 2 === 0 ? "#F5B942" : "#FFFFFF";
+      drawViewfinderBoxes(candidates, { activeId: pool[idx].id, activeColor: flashColor, lockedIds });
+    });
+    lockedIds.add(winner.id);
+    pool = pool.filter((c) => c.id !== winner.id);
+    drawViewfinderBoxes(candidates, { lockedIds });
+  }
 
   showResult(winners.map((_, i) => `발표자 ${i + 1}`), resultPanel, resultList);
   fireConfetti();
@@ -426,27 +511,6 @@ async function runCameraDraw() {
   drawBtn.hidden = true;
   resetBtn.hidden = false;
   state.isDrawing = false;
-}
-
-// 인식된 얼굴 브래킷을 빠르게 순환 하이라이트하여 '스캔 중' 연출
-function scanningAnimation(candidates, durationMs) {
-  return new Promise((resolve) => {
-    const start = performance.now();
-    function tick(now) {
-      const elapsed = now - start;
-      const highlightCount = Math.max(1, Math.ceil(candidates.length * 0.3));
-      const shuffled = [...candidates].sort(() => Math.random() - 0.5);
-      const highlightIds = new Set(shuffled.slice(0, highlightCount).map((c) => c.id));
-      drawViewfinderBoxes(candidates, highlightIds, null);
-
-      if (elapsed < durationMs) {
-        setTimeout(() => requestAnimationFrame(tick), 90);
-      } else {
-        resolve();
-      }
-    }
-    requestAnimationFrame(tick);
-  });
 }
 
 function resetCameraMode() {
@@ -489,31 +553,22 @@ async function runManualDraw() {
   drawBtnManual.classList.add("is-drawing");
   drawBtnManual.textContent = "추첨 중…";
 
-  const cells = Array.from(manualGrid.children);
-  await new Promise((resolve) => {
-    const start = performance.now();
-    function tick(now) {
-      cells.forEach((c) => c.classList.remove("is-scanning"));
-      const shuffled = [...cells].sort(() => Math.random() - 0.5);
-      shuffled.slice(0, Math.ceil(total * 0.25)).forEach((c) => c.classList.add("is-scanning"));
+  // 뽑힐 순서를 미리 정해 두고, 라운드마다 룰렛이 그 번호에서 멈추도록 연출합니다.
+  const numberPool = Array.from({ length: total }, (_, i) => i + 1);
+  const winners = pickRandomUnique(numberPool, pickCount);
 
-      if (now - start < 2200) {
-        setTimeout(() => requestAnimationFrame(tick), 90);
-      } else {
-        resolve();
-      }
-    }
-    requestAnimationFrame(tick);
-  });
+  let pool = Array.from(manualGrid.children); // 그리드에 보이는 순서(1→N) 그대로 사용
 
-  cells.forEach((c) => c.classList.remove("is-scanning"));
-
-  const pool = Array.from({ length: total }, (_, i) => i + 1);
-  const winners = pickRandomUnique(pool, pickCount);
-  winners.forEach((num) => {
-    const cell = cells.find((c) => Number(c.dataset.num) === num);
-    cell?.classList.add("is-winner");
-  });
+  for (const winnerNum of winners) {
+    const targetIndex = pool.findIndex((c) => Number(c.dataset.num) === winnerNum);
+    await runSpin(pool.length, targetIndex, (idx, step) => {
+      pool.forEach((c) => c.classList.remove("is-flash-a", "is-flash-b"));
+      pool[idx].classList.add(step % 2 === 0 ? "is-flash-a" : "is-flash-b");
+    });
+    pool[targetIndex].classList.remove("is-flash-a", "is-flash-b");
+    pool[targetIndex].classList.add("is-winner");
+    pool = pool.filter((_, i) => i !== targetIndex);
+  }
 
   showResult(
     winners.map((n) => `${n}번`),
@@ -571,13 +626,14 @@ function showResult(labels, panelEl, listEl) {
 
 // 외부 라이브러리 없이 캔버스로 그리는 가벼운 컨페티 연출
 function fireConfetti() {
+  resizeOverlay(); // 컨페티 캔버스도 최신 디바이스 픽셀비로 맞춥니다.
   const ctx = confettiCanvas.getContext("2d");
-  confettiCanvas.width = window.innerWidth;
-  confettiCanvas.height = window.innerHeight;
+  const cssW = window.innerWidth;
+  const cssH = window.innerHeight;
 
   const colors = ["#F5B942", "#4FD1C5", "#F1EFE7", "#E1523D"];
   const particles = Array.from({ length: 140 }, () => ({
-    x: Math.random() * confettiCanvas.width,
+    x: Math.random() * cssW,
     y: -20 - Math.random() * 200,
     size: 4 + Math.random() * 6,
     speedY: 2 + Math.random() * 3,
@@ -590,7 +646,7 @@ function fireConfetti() {
   const start = performance.now();
   function tick(now) {
     const elapsed = now - start;
-    ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    ctx.clearRect(0, 0, cssW, cssH);
 
     particles.forEach((p) => {
       p.x += p.speedX;
@@ -608,7 +664,7 @@ function fireConfetti() {
     if (elapsed < 2600) {
       requestAnimationFrame(tick);
     } else {
-      ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      ctx.clearRect(0, 0, cssW, cssH);
     }
   }
   requestAnimationFrame(tick);

@@ -118,8 +118,7 @@ button, input, select{ font-family:inherit; }
 .camera-status{
   position:absolute; top:16px; left:16px;
   display:flex; align-items:center; gap:8px;
-  background:rgba(11,14,20,.72);
-  backdrop-filter:blur(6px);
+  background:#0B0E14;
   padding:8px 14px;
   border-radius:999px;
   font-size:13px;
@@ -135,8 +134,7 @@ button, input, select{ font-family:inherit; }
 .face-counter{
   position:absolute; top:16px; right:16px;
   display:flex; align-items:baseline; gap:6px;
-  background:rgba(11,14,20,.72);
-  backdrop-filter:blur(6px);
+  background:#0B0E14;
   padding:8px 16px;
   border-radius:999px;
   border:1px solid var(--line);
@@ -156,8 +154,7 @@ button, input, select{ font-family:inherit; }
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
   gap:18px;
-  background:rgba(6,8,12,.72);
-  backdrop-filter:blur(4px);
+  background:rgba(6,8,12,.94);
 }
 .result-eyebrow{
   font-family:'JetBrains Mono', monospace;
@@ -299,6 +296,20 @@ button, input, select{ font-family:inherit; }
   transition:all .15s ease;
 }
 .manual-num.is-scanning{ border-color:var(--cyan); color:var(--cyan); }
+.manual-num.is-flash-a{
+  background:var(--gold);
+  border-color:var(--gold);
+  color:var(--bg);
+  box-shadow:0 0 18px rgba(245,185,66,.6);
+  transform:scale(1.05);
+}
+.manual-num.is-flash-b{
+  background:#FFFFFF;
+  border-color:#FFFFFF;
+  color:var(--bg);
+  box-shadow:0 0 18px rgba(255,255,255,.6);
+  transform:scale(1.05);
+}
 .manual-num.is-winner{
   background:var(--gold);
   border-color:var(--gold);
