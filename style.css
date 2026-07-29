@@ -150,11 +150,12 @@ button, input, select{ font-family:inherit; }
 
 /* ---------- 결과 패널 ---------- */
 .result-panel{
-  position:absolute; inset:0;
+  position:absolute; left:0; right:0; bottom:0;
   display:flex; flex-direction:column;
-  align-items:center; justify-content:center;
-  gap:18px;
-  background:rgba(6,8,12,.94);
+  align-items:center;
+  gap:14px;
+  padding:28px 16px 20px;
+  background:linear-gradient(180deg, rgba(6,8,12,0) 0%, rgba(6,8,12,.85) 45%, rgba(6,8,12,.96) 100%);
 }
 /* .result-panel의 display:flex는 일반 클래스 규칙이라, 브라우저 기본값인
    [hidden]{display:none}보다 우선 적용되어 hidden 속성을 무시하고 항상 화면을
@@ -176,13 +177,40 @@ button, input, select{ font-family:inherit; }
 }
 .result-chip{
   font-family:'Black Han Sans', sans-serif;
-  font-size:clamp(22px, 3.4vw, 44px);
+  font-size:clamp(20px, 3vw, 34px);
   color:var(--bg);
   background:var(--gold);
-  padding:10px 26px;
+  padding:9px 22px;
   border-radius:14px;
-  box-shadow:0 0 32px rgba(245,185,66,.55);
+  box-shadow:0 0 28px rgba(245,185,66,.5);
   animation:pop .4s cubic-bezier(.2,1.4,.4,1) backwards;
+}
+/* 카메라 모드: 썸네일 이미지가 있는 경우 카드형 레이아웃으로 전환 */
+.result-chip.has-thumb{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+  background:transparent;
+  padding:0;
+  box-shadow:none;
+}
+.result-chip.has-thumb img{
+  width:88px; height:88px;
+  border-radius:16px;
+  object-fit:cover;
+  border:3px solid var(--gold);
+  box-shadow:0 0 22px rgba(245,185,66,.6);
+  background:var(--panel-2);
+}
+.result-chip.has-thumb .result-chip-label{
+  font-family:'Black Han Sans', sans-serif;
+  font-size:14px;
+  color:var(--gold);
+  background:rgba(11,14,20,.85);
+  padding:4px 12px;
+  border-radius:999px;
+  white-space:nowrap;
 }
 @keyframes pop{
   0%{ transform:scale(.4) rotate(-6deg); opacity:0; }

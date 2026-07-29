@@ -491,6 +491,52 @@ function drawCornerBrackets(ctx, x, y, w, h, color, lineWidth) {
   });
 }
 
+// 추첨이 끝난 순간의 영상 프레임을 캔버스에 그대로 캡처해 둡니다.
+// (video 자체를 pause()해서 화면도 함께 정지시키고, 이 캔버스에서 당첨자 얼굴만
+//  잘라내 결과 화면에 작은 썸네일로 보여주는 데 사용합니다.)
+function captureFrameCanvas() {
+  const map = state.coverMap || {
+    srcX: 0,
+    srcY: 0,
+    srcW: video.videoWidth,
+    srcH: video.videoHeight,
+  };
+  const cssW = overlay.clientWidth;
+  const cssH = overlay.clientHeight;
+  const canvas = document.createElement("canvas");
+  canvas.width = cssW;
+  canvas.height = cssH;
+  canvas
+    .getContext("2d")
+    .drawImage(video, map.srcX, map.srcY, map.srcW, map.srcH, 0, 0, cssW, cssH);
+  return canvas;
+}
+
+// 캡처된 프레임에서 특정 얼굴 주변을 넉넉히 잘라 정사각형 썸네일(dataURL)로 반환합니다.
+function cropFaceThumbnail(frameCanvas, track, outSize = 160) {
+  const cssW = frameCanvas.width;
+  const cssH = frameCanvas.height;
+  const boxW = track.box.w * cssW;
+  const boxH = track.box.h * cssH;
+  const cx = track.box.x * cssW + boxW / 2;
+  const cy = track.box.y * cssH + boxH / 2;
+  const cropSize = Math.max(boxW, boxH) * 1.8; // 얼굴 주변 여유를 넉넉히 포함해 알아보기 쉽게
+
+  const sx = Math.max(0, Math.min(cx - cropSize / 2, cssW - cropSize));
+  const sy = Math.max(0, Math.min(cy - cropSize / 2, cssH - cropSize));
+  const sw = Math.min(cropSize, cssW);
+  const sh = Math.min(cropSize, cssH);
+
+  const out = document.createElement("canvas");
+  out.width = outSize;
+  out.height = outSize;
+  const outCtx = out.getContext("2d");
+  outCtx.fillStyle = "#12161F";
+  outCtx.fillRect(0, 0, outSize, outSize);
+  outCtx.drawImage(frameCanvas, sx, sy, sw, sh, 0, 0, outSize, outSize);
+  return out.toDataURL("image/png");
+}
+
 /* ----------------------------------------------------------
    11. 추첨 버튼 상태 관리
    ---------------------------------------------------------- */
@@ -577,14 +623,28 @@ async function runCameraDraw() {
     drawViewfinderBoxes(candidates, { lockedIds });
   }
 
-  showResult(winners.map((_, i) => `발표자 ${i + 1}`), resultPanel, resultList);
+  // 화면을 정지시켜, 당첨자의 금색 박스가 실제 교실 화면 위에 그대로 남아있게 합니다.
+  // (누가 몇 번 자리에 있었는지 박스 위치로 바로 확인 가능)
+  video.pause();
+  const frameSnapshot = captureFrameCanvas();
+
+  showResult(
+    winners.map((winner, i) => ({
+      label: `발표자 ${i + 1} · ${winner.id}번`,
+      thumb: cropFaceThumbnail(frameSnapshot, winner),
+    })),
+    resultPanel,
+    resultList
+  );
   fireConfetti();
 
   drawBtn.classList.remove("is-drawing");
   drawBtn.textContent = "추첨 시작";
   drawBtn.hidden = true;
   resetBtn.hidden = false;
-  state.isDrawing = false;
+  // state.isDrawing은 여기서 false로 되돌리지 않습니다. 계속 true로 두어야
+  // 실시간 인식 루프가 화면을 다시 덮어쓰지 않고, 정지된 화면 + 금색 강조 박스가
+  // '다시 인식하기'를 누르기 전까지 그대로 유지됩니다.
 }
 
 function resetCameraMode() {
@@ -593,6 +653,8 @@ function resetCameraMode() {
   drawBtn.hidden = false;
   resetBtn.hidden = true;
   drawBtn.disabled = false;
+  state.isDrawing = false;
+  video.play();
 }
 
 /* ----------------------------------------------------------
@@ -645,7 +707,7 @@ async function runManualDraw() {
   }
 
   showResult(
-    winners.map((n) => `${n}번`),
+    winners.map((n) => ({ label: `${n}번` })),
     manualResultPanel,
     manualResultList
   );
@@ -686,13 +748,27 @@ function pickRandomUnique(list, count) {
   return picked;
 }
 
-function showResult(labels, panelEl, listEl) {
+// items: [{label, thumb?}] — thumb이 있으면(카메라 모드) 얼굴 썸네일을 함께 보여주고,
+// 없으면(번호 추첨 모드) 기존처럼 큰 번호 칩만 보여줍니다.
+function showResult(items, panelEl, listEl) {
   listEl.innerHTML = "";
-  labels.forEach((label, i) => {
+  items.forEach((item, i) => {
     const chip = document.createElement("div");
-    chip.className = "result-chip";
+    chip.className = "result-chip" + (item.thumb ? " has-thumb" : "");
     chip.style.animationDelay = `${i * 90}ms`;
-    chip.textContent = label;
+
+    if (item.thumb) {
+      const img = document.createElement("img");
+      img.src = item.thumb;
+      img.alt = item.label;
+      chip.appendChild(img);
+    }
+
+    const labelEl = document.createElement("span");
+    labelEl.className = "result-chip-label";
+    labelEl.textContent = item.label;
+    chip.appendChild(labelEl);
+
     listEl.appendChild(chip);
   });
   panelEl.hidden = false;
