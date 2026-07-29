@@ -60,6 +60,8 @@ const resultPanel = $("resultPanel");
 const resultList = $("resultList");
 const deviceSelect = $("deviceSelect");
 const resolutionSelect = $("resolutionSelect");
+const brightnessSlider = $("brightnessSlider");
+const brightnessValue = $("brightnessValue");
 const pickCountInput = $("pickCount");
 const drawBtn = $("drawBtn");
 const resetBtn = $("resetBtn");
@@ -153,6 +155,22 @@ resolutionSelect.addEventListener("change", () => {
   // 해상도 모드를 바꾸면 현재 선택된 카메라로 스트림을 다시 시작합니다.
   startVideoStream(deviceSelect.value || undefined);
 });
+
+/* ----------------------------------------------------------
+   5-1. 밝기 보정 (역광·저조도 보정)
+   ---------------------------------------------------------- */
+// 카메라 자체의 노출(exposure)을 브라우저에서 직접 제어하기는 어려우므로,
+// 화면에 표시되는 영상에 밝기/대비 필터를 입혀 어둡게 찍힌 화면을 보정합니다.
+function applyBrightness(value) {
+  const brightness = Number(value);
+  // 밝기를 올릴수록 대비도 살짝 함께 올려 뿌옇게 날리는 느낌을 줄입니다.
+  const contrast = 1 + (brightness - 1) * 0.35;
+  video.style.filter = `brightness(${brightness}) contrast(${contrast})`;
+  brightnessValue.textContent = `${brightness.toFixed(2)}×`;
+}
+
+brightnessSlider.addEventListener("input", () => applyBrightness(brightnessSlider.value));
+applyBrightness(brightnessSlider.value); // 초기값 즉시 적용 (역광 환경을 감안해 기본값을 살짝 밝게 설정)
 
 /* ----------------------------------------------------------
    6. 카메라 스트림 시작

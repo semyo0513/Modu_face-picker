@@ -224,6 +224,39 @@ button, input, select{ font-family:inherit; }
 }
 .stepper-btn:active{ background:var(--cyan); color:var(--bg); }
 
+.stepper input[type="range"]{
+  flex:1;
+  appearance:none;
+  height:6px;
+  border-radius:999px;
+  background:var(--panel-2);
+  outline:none;
+}
+.stepper input[type="range"]::-webkit-slider-thumb{
+  appearance:none;
+  width:20px; height:20px;
+  border-radius:50%;
+  background:var(--gold);
+  cursor:pointer;
+  box-shadow:0 0 8px rgba(245,185,66,.6);
+}
+.stepper input[type="range"]::-moz-range-thumb{
+  width:20px; height:20px;
+  border:none;
+  border-radius:50%;
+  background:var(--gold);
+  cursor:pointer;
+  box-shadow:0 0 8px rgba(245,185,66,.6);
+}
+.brightness-value{
+  font-family:'JetBrains Mono', monospace;
+  font-weight:700;
+  font-size:14px;
+  color:var(--gold);
+  min-width:48px;
+  text-align:right;
+}
+
 .draw-btn{
   margin-top:4px;
   padding:16px;

@@ -78,6 +78,14 @@
         </div>
 
         <div class="field">
+          <label for="brightnessSlider">화면 밝기 보정 (역광·저조도일 때 밝게)</label>
+          <div class="stepper">
+            <input id="brightnessSlider" type="range" min="1" max="2.2" step="0.05" value="1.25" />
+            <span id="brightnessValue" class="brightness-value">1.25×</span>
+          </div>
+        </div>
+
+        <div class="field">
           <label for="pickCount">몇 명을 뽑을까요?</label>
           <div class="stepper">
             <button id="countMinus" class="stepper-btn" aria-label="인원 줄이기">−</button>
@@ -92,9 +100,10 @@
         <details class="tips">
           <summary>인식이 잘 안 될 때</summary>
           <ul>
+            <li>화면이 어둡거나 흐릿하게 보인다면 대부분 <strong>역광</strong>(창문·조명을 등지고 촬영) 또는 저조도 때문입니다. 위 <strong>밝기 보정</strong> 슬라이더를 올리거나, 창문을 등지지 않도록 카메라 방향을 바꿔주세요.</li>
+            <li>스마트폰을 카메라로 쓴다면 전면(셀피) 카메라보다 <strong>후면 카메라</strong>가 화질이 더 좋은 경우가 많습니다.</li>
             <li>전자칠판 내장 카메라보다 <strong>외장 웹캠(1080p 이상)</strong>을 교실 뒤쪽까지 보이게 설치하면 인식률이 올라갑니다.</li>
             <li>먼 자리 학생은 얼굴이 작게 잡혀 인식이 늦을 수 있어요. 잠시 기다리거나 카메라를 앞쪽으로 당겨보세요.</li>
-            <li>역광(창문을 등지고 촬영)은 피해주세요.</li>
             <li>인식이 계속 어렵다면 <strong>번호 추첨 모드</strong>로 전환해 출석 번호로 뽑을 수 있습니다.</li>
           </ul>
         </details>
