@@ -210,6 +210,12 @@ function resizeOverlay() {
   // 고해상도(레티나 등) 화면에서도 박스 선이 흐려지지 않게 합니다.
   const cssW = video.clientWidth || overlay.clientWidth;
   const cssH = video.clientHeight || overlay.clientHeight;
+
+  // 레이아웃이 아직 확정되지 않아 크기가 0인 순간에는 건너뜁니다.
+  // (이 시점에 0×0으로 캔버스를 설정하면 이후 다시 리사이즈 이벤트가 없을 경우
+  //  박스가 영원히 그려지지 않는 문제가 있었습니다.)
+  if (!cssW || !cssH) return;
+
   overlay.width = Math.round(cssW * dpr);
   overlay.height = Math.round(cssH * dpr);
   overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -222,7 +228,7 @@ function resizeOverlay() {
   // video는 object-fit:cover로 표시되므로, 실제 화면에 "보이는" 영상 영역만
   // 원본 픽셀 좌표계에서 계산해 둡니다. 이 영역 기준으로 얼굴 좌표를 매핑해야
   // 좌우 화면 비율이 다른 카메라에서도 박스가 얼굴 위치와 어긋나지 않습니다.
-  if (video.videoWidth && video.videoHeight && cssW && cssH) {
+  if (video.videoWidth && video.videoHeight) {
     const videoAR = video.videoWidth / video.videoHeight;
     const boxAR = cssW / cssH;
     if (videoAR > boxAR) {
@@ -240,6 +246,11 @@ window.addEventListener("resize", resizeOverlay);
 // 카메라/해상도 전환 시 영상의 실제 프레임 크기가 확정되는 시점에도 다시 계산합니다.
 video.addEventListener("loadedmetadata", resizeOverlay);
 video.addEventListener("resize", resizeOverlay);
+// ResizeObserver: 위 이벤트들만으로는 "레이아웃이 실제로 몇 px로 확정됐는지"를
+// 정확한 타이밍에 알 수 없어 0×0으로 잘못 설정되는 경우가 있었습니다.
+// .viewport 박스의 실제 렌더링 크기가 바뀔 때마다(0→실제 크기가 되는 최초 순간 포함)
+// 확실하게 다시 계산하도록 보강합니다.
+new ResizeObserver(() => resizeOverlay()).observe(video.closest(".viewport"));
 
 /* ----------------------------------------------------------
    7. MediaPipe FaceDetector 초기화
@@ -275,12 +286,25 @@ async function initCamera() {
   }
   try {
     await startVideoStream(undefined);
-    await initFaceDetector();
+
+    // 학교 네트워크 방화벽이 구글 모델 서버(storage.googleapis.com)를 막아두면
+    // 요청이 응답 없이 계속 대기(hang)할 수 있어, 일정 시간 후엔 실패로 간주하고
+    // 사용자에게 원인을 명확히 안내합니다.
+    await Promise.race([
+      initFaceDetector(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("모델 로딩 시간 초과")), 12000)
+      ),
+    ]);
+
     state.running = true;
     requestAnimationFrame(detectionLoop);
   } catch (err) {
     console.error(err);
-    setCameraStatus(false, "초기화 중 오류가 발생했습니다.");
+    setCameraStatus(
+      false,
+      "AI 인식 모델을 불러오지 못했습니다. 네트워크에서 구글 도메인이 차단되어 있을 수 있습니다 — 번호 추첨 모드를 이용해주세요."
+    );
   }
 }
 
