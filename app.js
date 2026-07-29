@@ -31,15 +31,17 @@ const RESOLUTION_PRESETS = {
 const SMOOTHING = 0.35;
 // 이전 프레임 박스와 현재 박스를 같은 얼굴로 인정할 최대 이동 거리(정규화 좌표 기준).
 const MATCH_THRESHOLD = 0.12;
-// 몇 프레임 연속으로 인식되지 않으면 트래킹에서 제거할지.
-const MAX_MISSES = 8;
+// 고개를 돌리거나 잠시 다른 곳을 보는 등 일시적으로 인식이 끊겨도 같은 얼굴로 유지해줄
+// 최대 시간(ms). 프레임 수가 아니라 "시간"으로 관리해야 기기 성능(프레임레이트)이
+// 달라도 항상 같은 체감 시간(약 5초) 동안 유지됩니다.
+const MISS_TIMEOUT_MS = 5000;
 
 const state = {
   mode: "camera", // "camera" | "manual"
   faceDetector: null,
   stream: null,
   running: false,
-  tracks: [], // [{id, box:{x,y,w,h}, misses}]
+  tracks: [], // [{id, box:{x,y,w,h}, lastSeen}]
   nextTrackId: 1,
   isDrawing: false, // 추첨 애니메이션 진행 중 여부
   coverMap: null, // object-fit:cover로 잘리는 실제 화면 표시 영역 (원본 영상 픽셀 기준)
@@ -333,8 +335,9 @@ function detectionLoop() {
   if (!state.running) return;
 
   if (video.readyState >= 2 && state.faceDetector && !state.isDrawing) {
-    const result = state.faceDetector.detectForVideo(video, performance.now());
-    updateTracks(result.detections);
+    const now = performance.now();
+    const result = state.faceDetector.detectForVideo(video, now);
+    updateTracks(result.detections, now);
     drawViewfinderBoxes(state.tracks);
     faceCountNum.textContent = state.tracks.length;
     updateDrawButtonState();
@@ -362,7 +365,7 @@ function toNormalizedBox(detection) {
 
 // 이전 프레임 트랙과 이번 프레임 인식 결과를 가장 가까운 위치끼리 매칭하고,
 // 지수이동평균으로 부드럽게 위치를 갱신합니다. (간단한 프레임 간 트래커)
-function updateTracks(detections) {
+function updateTracks(detections, now) {
   const boxes = detections.map(toNormalizedBox);
   const usedBoxIdx = new Set();
 
@@ -388,21 +391,21 @@ function updateTracks(detections) {
       track.box.y += (box.y - track.box.y) * SMOOTHING;
       track.box.w += (box.w - track.box.w) * SMOOTHING;
       track.box.h += (box.h - track.box.h) * SMOOTHING;
-      track.misses = 0;
+      track.lastSeen = now; // 이번 프레임에 인식됨 → 유지 타이머 초기화
       usedBoxIdx.add(bestIdx);
-    } else {
-      track.misses += 1;
     }
+    // 매칭되지 않은 경우 lastSeen을 갱신하지 않고 마지막 위치 그대로 둡니다.
+    // (고개를 돌려 잠시 인식이 안 되는 동안에도 박스가 그 자리에 남아있게 됨)
   });
 
   // 매칭되지 않은 새 얼굴은 새 트랙으로 추가
   boxes.forEach((box, i) => {
     if (usedBoxIdx.has(i)) return;
-    state.tracks.push({ id: state.nextTrackId++, box: { ...box }, misses: 0 });
+    state.tracks.push({ id: state.nextTrackId++, box: { ...box }, lastSeen: now });
   });
 
-  // 너무 오래 인식되지 않은 트랙은 제거
-  state.tracks = state.tracks.filter((t) => t.misses <= MAX_MISSES);
+  // MISS_TIMEOUT_MS 동안 한 번도 다시 인식되지 않은 트랙만 제거합니다.
+  state.tracks = state.tracks.filter((t) => now - t.lastSeen <= MISS_TIMEOUT_MS);
 }
 
 /* ----------------------------------------------------------
@@ -433,7 +436,36 @@ function drawViewfinderBoxes(tracks, { activeId = null, activeColor = "#F5B942",
     }
 
     drawCornerBrackets(overlayCtx, x, y, w, h, color, lineWidth);
+    drawFaceNumberBadge(overlayCtx, x, y, w, h, track.id, color);
   });
+}
+
+// 각 얼굴 박스 위에 고유 번호 배지를 그립니다. 이 캔버스 전체는 CSS로 좌우
+// 반전(scaleX(-1))되어 있으므로, 텍스트만 로컬 좌표계에서 다시 한 번 반전시켜
+// 화면에는 정방향 숫자로 보이게 합니다.
+function drawFaceNumberBadge(ctx, x, y, w, h, id, color) {
+  const label = String(id);
+  const cx = x + Math.min(22, w * 0.18);
+  const cy = Math.max(16, y - 14); // 화면 위쪽으로 잘리지 않게 최소 위치 확보
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(-1, 1);
+
+  ctx.font = "700 15px 'JetBrains Mono', monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const paddingX = 7;
+  const textWidth = ctx.measureText(label).width;
+  const boxW = Math.max(24, textWidth + paddingX * 2);
+  const boxH = 22;
+
+  ctx.fillStyle = color;
+  ctx.fillRect(-boxW / 2, -boxH / 2, boxW, boxH);
+  ctx.fillStyle = "#0B0E14";
+  ctx.fillText(label, 0, 1);
+  ctx.restore();
 }
 
 // 사각형 전체가 아닌 네 모서리만 그려주는 '오토포커스 브래킷' 스타일

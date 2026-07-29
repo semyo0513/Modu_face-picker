@@ -156,6 +156,10 @@ button, input, select{ font-family:inherit; }
   gap:18px;
   background:rgba(6,8,12,.94);
 }
+/* .result-panel의 display:flex는 일반 클래스 규칙이라, 브라우저 기본값인
+   [hidden]{display:none}보다 우선 적용되어 hidden 속성을 무시하고 항상 화면을
+   덮어버리는 문제가 있었습니다. 아래 규칙으로 hidden일 때는 확실히 감춥니다. */
+.result-panel[hidden]{ display:none; }
 .result-eyebrow{
   font-family:'JetBrains Mono', monospace;
   letter-spacing:.18em;
